@@ -6,8 +6,9 @@ import ffmpeg from "fluent-ffmpeg";
 import {pipeline} from "stream"
 import { OggLogicalBitstream, OpusHead } from "prism-media/dist/opus";
 import {Configuration, OpenAIApi} from "openai"
-import axios from "axios"
 import FormData from "form-data"
+import axios, {AxiosResponse} from "axios"
+import {promisify} from "util"
 
 require("dotenv").config()
 require("dotenv").config({path: ".env.development", override: true})
@@ -58,39 +59,6 @@ client.on("messageCreate", async msg => {
 
         // notification(connection)
         await respond(userId, connection, msg, username)
-
-        // await record(userId, connection)
-        //     .then(() => {
-        //         const output = `./recordings/${userId}.mp3`
-        //         var outStream = fs.createWriteStream(output)
-
-        //         convert2mp3(userId, outStream)
-        //             .then(() => {
-        //                 getAudioTranscription(userId)
-        //                     .then(text => {
-        //                         console.log("Original", text)
-
-        //                         getCompletion(text)
-        //                             .then(ans => {
-        //                                 console.log("Answer", ans)
-        //                                 msg.channel.send({
-        //                                     content: ans,
-        //                                     tts: true
-        //                                 })
-        //                             })
-
-        //                     })
-        //                     .catch(err => {
-        //                         console.log(err)
-        //                     })
-        //             })
-        //             .catch(err => {
-        //                 console.log(err)
-        //             })
-        //     })
-        //     .catch(err => {
-        //         console.log(err)
-        //     })
     }
 
 })
@@ -105,22 +73,33 @@ async function respond(userId: string, connection: VoiceConnection, msg: Message
                     .then(() => {
                         getAudioTranscription(userId)
                             .then(text => {
-                                console.log("Original", text)
+                                console.log("💭Yui is thinking!")
 
                                 getCompletion(`${username}: ${text}`)
                                     .then(ans => {
+                                        console.log("Original", text)
                                         console.log("Answer", ans)
 
-                                        const timeout = (0.2 * ans.length) * 1000
+                                        // const timeout = (0.2 * ans.length) * 1000
+                                        const timeout = (0.3 * ans.length) * 1000
                                         console.log(timeout)
-                                        msg.channel.send({
-                                            content: ans,
-                                            tts: true
-                                        })
-                                        setTimeout(() => {
-                                            notification(connection)
-                                            respond(userId, connection, msg, username)
-                                        }, timeout)
+
+                                        text2speech(userId, ans, 46)
+                                            .then(() => {
+                                                notification(connection, `./recordings/${userId}-answer.wav`)
+                                                msg.channel.send({
+                                                    content: ans,
+                                                    // tts: true
+                                                })
+                                                
+                                                console.log("🛏️Yui wants to take a nap!")
+                                                setTimeout(() => {
+                                                    notification(connection, "./sounds/tone.wav")
+                                                    respond(userId, connection, msg, username)
+                                                }, timeout)
+
+                                            })
+
                                     })
 
                             })
@@ -223,9 +202,7 @@ async function getAudioTranscription(userId: string): Promise<string>{
     })
 }
 
-async function notification(connection: VoiceConnection){
-    const sound = "./sounds/tone.wav"
-
+async function notification(connection: VoiceConnection, sound_path: string){
     const player = createAudioPlayer({
         behaviors: {
             noSubscriber: NoSubscriberBehavior.Pause
@@ -234,13 +211,43 @@ async function notification(connection: VoiceConnection){
 
     connection.subscribe(player)
     
-    const audioSrc = createAudioResource(sound, {
+    const audioSrc = createAudioResource(sound_path, {
         inputType: StreamType.Arbitrary
     })
     await player.play(audioSrc)
     await entersState(player, AudioPlayerStatus.Playing, 10 * 1000)
     await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000)
 }
+
+async function text2speech(userId: string, text: string, speaker: number=14, endpoint: string="127.0.0.1:50021"): Promise<any>{
+    const writeFile = promisify(fs.writeFile)
+    
+    return new Promise(async (resolve, reject) => {
+        try{
+            const audioQueryUrl = `http://${endpoint}/audio_query?text=${text}&speaker=${speaker}`
+            const audioQueryHeaders = { 'accept': 'application/json' };
+
+            const response = await axios.post(audioQueryUrl, { headers: audioQueryHeaders })
+
+            const payload = response.data
+
+            const synthesisUrl = `http://${endpoint}/synthesis?speaker=${speaker}&enable_interrogative_upspeak=true`
+            const synthesisHeaders = {
+                'accept': 'audio/wav',
+                'Content-Type': 'application/json'
+            };
+            const synthesisResponse = await axios.post(synthesisUrl, payload, {headers: synthesisHeaders, responseType: 'arraybuffer'})
+
+            await writeFile(`./recordings/${userId}-answer.wav`, synthesisResponse.data)
+
+            resolve("")
+        }catch(err){
+            console.log(err)
+            reject(err)
+        }
+    })
+}
+
 
 let talkHistory = new Array<string>
 async function getCompletion(prompt: string): Promise<string> {
@@ -251,7 +258,8 @@ async function getCompletion(prompt: string): Promise<string> {
         messages: [
             {
                 "role": "system",
-                "content": `あなたはプロのプログラマーです`
+                "content": `
+`
             },
             {
                 "role": "user",
@@ -268,7 +276,6 @@ async function getCompletion(prompt: string): Promise<string> {
     }
     talkHistory.push(res)
     talkHistory.push(prompt)
-
 
     return res
 }
