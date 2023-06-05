@@ -81,10 +81,10 @@ async function respond(userId: string, connection: VoiceConnection, msg: Message
                                         console.log("Answer", ans)
 
                                         // const timeout = (0.2 * ans.length) * 1000
-                                        const timeout = (0.3 * ans.length) * 1000
+                                        const timeout = (0.25 * ans.length) * 1000
                                         console.log(timeout)
 
-                                        text2speech(userId, ans, 46)
+                                        text2speech(userId, ans, 47)
                                             .then(() => {
                                                 notification(connection, `./recordings/${userId}-answer.wav`)
                                                 msg.channel.send({
@@ -95,7 +95,9 @@ async function respond(userId: string, connection: VoiceConnection, msg: Message
                                                 console.log("🛏️Yui wants to take a nap!")
                                                 setTimeout(() => {
                                                     notification(connection, "./sounds/tone.wav")
-                                                    respond(userId, connection, msg, username)
+                                                    setTimeout(() => {
+                                                        respond(userId, connection, msg, username)
+                                                    }, 1000)
                                                 }, timeout)
 
                                             })
@@ -205,7 +207,7 @@ async function getAudioTranscription(userId: string): Promise<string>{
 async function notification(connection: VoiceConnection, sound_path: string){
     const player = createAudioPlayer({
         behaviors: {
-            noSubscriber: NoSubscriberBehavior.Pause
+            noSubscriber: NoSubscriberBehavior.Pause,
         }
     })
 
@@ -214,7 +216,12 @@ async function notification(connection: VoiceConnection, sound_path: string){
     const audioSrc = createAudioResource(sound_path, {
         inputType: StreamType.Arbitrary
     })
-    await player.play(audioSrc)
+    if (sound_path.includes("tone.wav")){
+        console.log("fdsafdsafsda")
+        audioSrc.volume?.setVolume(0.1)
+    }
+
+    player.play(audioSrc)
     await entersState(player, AudioPlayerStatus.Playing, 10 * 1000)
     await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000)
 }
@@ -249,33 +256,35 @@ async function text2speech(userId: string, text: string, speaker: number=14, end
 }
 
 
-let talkHistory = new Array<string>
+let talkHistory_array = new Array<any>
 async function getCompletion(prompt: string): Promise<string> {
-    console.log(talkHistory)
+    console.log(talkHistory_array)
+
+    talkHistory_array.push({
+        "role": "user",
+        "content": prompt
+    })
 
     const result = await openAI.createChatCompletion({
         model: "gpt-3.5-turbo",
         messages: [
             {
                 "role": "system",
-                "content": `
-`
+                "content": ``
             },
-            {
-                "role": "user",
-                "content": `
-                ${talkHistory.join("\n")}
-                ${prompt}
-                `
-            }
+            ...talkHistory_array
         ]
     })
     const res = String(result.data.choices[0].message?.content)
-    if (talkHistory.length > 5){
-        talkHistory.shift()
+    talkHistory_array.push({
+        "role": "system",
+        "content": "system: " + res 
+    })
+    
+
+    if (talkHistory_array.length > 5){
+        talkHistory_array.shift()
     }
-    talkHistory.push(res)
-    talkHistory.push(prompt)
 
     return res
 }
