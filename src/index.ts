@@ -7,7 +7,7 @@ import {pipeline} from "stream"
 import { OggLogicalBitstream, OpusHead } from "prism-media/dist/opus";
 import {Configuration, OpenAIApi} from "openai"
 import FormData from "form-data"
-import axios, {AxiosResponse} from "axios"
+import axios from "axios"
 import {promisify} from "util"
 
 require("dotenv").config()
@@ -81,12 +81,12 @@ async function respond(userId: string, connection: VoiceConnection, msg: Message
                                         console.log("Answer", ans)
 
                                         // const timeout = (0.2 * ans.length) * 1000
-                                        const timeout = (0.25 * ans.length) * 1000
+                                        const timeout = (0.225 * ans.length) * 1000
                                         console.log(timeout)
 
                                         text2speech(userId, ans, 47)
                                             .then(() => {
-                                                notification(connection, `./recordings/${userId}-answer.wav`)
+                                                playSound(connection, `./recordings/${userId}-answer.wav`)
                                                 msg.channel.send({
                                                     content: ans,
                                                     // tts: true
@@ -94,27 +94,41 @@ async function respond(userId: string, connection: VoiceConnection, msg: Message
                                                 
                                                 console.log("🛏️Yui wants to take a nap!")
                                                 setTimeout(() => {
-                                                    notification(connection, "./sounds/tone.wav")
+                                                    playSound(connection, "./sounds/tone.wav")
                                                     setTimeout(() => {
                                                         respond(userId, connection, msg, username)
                                                     }, 1000)
                                                 }, timeout)
 
                                             })
+                                            .catch(err => {
+                                                console.warn("4", err)
+                                            })
 
                                     })
 
                             })
                             .catch(err => {
-                                console.log(err)
+                                console.warn("3", err)
                             })
                     })
                     .catch(err => {
-                        console.log(err)
+                        console.warn("2", err)
+                    })
+                    .finally(() => {
+                        const saveTo = `./recordings/${userId}` 
+                        const unprocessedFile = saveTo + ".pcm" 
+
+                        if (fs.existsSync(unprocessedFile)){
+                            fs.unlink(unprocessedFile, err => {
+                                // console.log("kore?", err)
+                            })
+                        }
+                        console.log("🔨Yui managed to delete pcm file!")
                     })
             })
             .catch(err => {
-                console.log(err)
+                console.warn("1", err)
             })
 }
 
@@ -140,25 +154,28 @@ async function record(userId: string, connection: VoiceConnection): Promise<any>
 
     const saveTo = `./recordings/${userId}` 
     const unprocessedFile = saveTo + ".pcm"
+    
+    // if (fs.existsSync(unprocessedFile)){
+    //     fs.unlink(unprocessedFile, err => {
+    //         // console.log("kore?", err)
+    //     })
+    // }
+    
     const out = fs.createWriteStream(unprocessedFile, {flags: "a"})
 
     console.log(`🦻Yui is hearing!`)
-    
-    if (fs.existsSync(unprocessedFile)){
-        fs.unlink(unprocessedFile, err => {
-            console.log(err)
-        })
-    }
 
     return new Promise((resolve, reject) => {
-        pipeline(opusStream, oggStream, out, (err) => {
-            if (err){
-                reject(err)
-            }else{
-                console.log("🫶Recorded!")
-                resolve("")
-            }
-        })
+        setTimeout(() => {
+            pipeline(opusStream, oggStream, out, (err) => {
+                if (err){
+                    reject(err)
+                }else{
+                    console.log("🫶Recorded!")
+                    resolve("")
+                }
+            })
+        }, 200);
     })
 }
 
@@ -166,17 +183,24 @@ async function convert2mp3(userId: string, output: fs.WriteStream): Promise<any>
     const filename = `./recordings/${userId}.pcm`
 
     return new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(filename)
-            .audioQuality(96)
-            .toFormat("mp3")
-            .on("end", () => {
-                resolve("")
-            })
-            .on("error", err => {
-                reject(err)
-            })
-            .pipe(output, {end: true})
+        try{
+            ffmpeg()
+                .input(filename)
+                .audioQuality(96)
+                .toFormat("mp3")
+                .on("end", () => {
+                    resolve("")
+                })
+                .on("error", err => {
+                    console.log("aaaa")
+                    reject(err)
+                })
+                .pipe(output, {end: true})
+
+        }catch(err){
+            console.log("1111")
+            reject(err)
+        }
     })
 }
 
@@ -204,7 +228,7 @@ async function getAudioTranscription(userId: string): Promise<string>{
     })
 }
 
-async function notification(connection: VoiceConnection, sound_path: string){
+async function playSound(connection: VoiceConnection, sound_path: string){
     const player = createAudioPlayer({
         behaviors: {
             noSubscriber: NoSubscriberBehavior.Pause,
@@ -214,10 +238,10 @@ async function notification(connection: VoiceConnection, sound_path: string){
     connection.subscribe(player)
     
     const audioSrc = createAudioResource(sound_path, {
-        inputType: StreamType.Arbitrary
+        inputType: StreamType.Arbitrary,
+        inlineVolume: true
     })
     if (sound_path.includes("tone.wav")){
-        console.log("fdsafdsafsda")
         audioSrc.volume?.setVolume(0.1)
     }
 
@@ -277,8 +301,8 @@ async function getCompletion(prompt: string): Promise<string> {
     })
     const res = String(result.data.choices[0].message?.content)
     talkHistory_array.push({
-        "role": "system",
-        "content": "system: " + res 
+        "role": "assistant",
+        "content": res 
     })
     
 
