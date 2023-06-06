@@ -1,9 +1,15 @@
+<p align="center">
+  <img src="https://github.com/Leaf48/YuiGPT-Discord-Bot/assets/58620209/96312433-13de-4db3-9fda-7003b7bde16f">
+</p>
+
 # YuiGPT-Discord-Bot
 You Can Talk Virtual Character Yui via Voice Chat, Powered by WhisperAI and ChatGPT
 
 ## Environments
 ### Docker
-- docker run -d --rm -p '127.0.0.1:50021:50021' voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+```docker
+docker run -d --rm -p '127.0.0.1:50021:50021' voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+```
 
 ### .env
 全くと言っていいほどキャラクター設定はしてないので、必要に応じて設定してください。<br>
