@@ -5,6 +5,14 @@ You Can Talk Virtual Character Yui via Voice Chat, Powered by WhisperAI and Chat
 ### Docker
 - docker run -d --rm -p '127.0.0.1:50021:50021' voicevox/voicevox_engine:cpu-ubuntu20.04-latest
 
+### .env
+全くと言っていいほどキャラクター設定はしてないので、必要に応じて設定してください。<br>
+The character has not been set up the charactarization at all, so you can set up if you need to.
+```.env
+token=abcdefg
+openai=123456
+character="唯(ゆい)です。"
+```
 ### Characters
 ```json
 [
