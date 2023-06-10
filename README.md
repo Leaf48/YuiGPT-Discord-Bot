@@ -4,6 +4,7 @@
 
 # YuiGPT-Discord-Bot
 You Can Talk Virtual Character Yui via Discord Voice Chat, Powered by WhisperAI and ChatGPT
+Discordのボイスチャットを通じてバーチャルキャラクターとリアルタイムで会話することができます。
 
 ## Environments
 ### Docker
